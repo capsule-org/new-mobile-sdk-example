@@ -13,17 +13,23 @@ import {
   StatusBar,
   StyleSheet,
   Text,
+  TouchableOpacity,
   useColorScheme,
   View,
 } from 'react-native';
 
+import {Colors, Header} from 'react-native/Libraries/NewAppScreen';
+
+import {createUser, verifyEmail} from '@usecapsule/react-native-wallet';
+
 import {
-  Colors,
-  DebugInstructions,
-  Header,
-  LearnMoreLinks,
-  ReloadInstructions,
-} from 'react-native/Libraries/NewAppScreen';
+  USER_ID_TAG,
+  ReactNativeCapsuleWallet,
+} from '@usecapsule/react-native-wallet';
+
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+import uuid from 'react-native-uuid';
 
 type SectionProps = PropsWithChildren<{
   title: string;
@@ -62,6 +68,49 @@ function App(): JSX.Element {
     backgroundColor: isDarkMode ? Colors.darker : Colors.lighter,
   };
 
+  const [idUser, setIdUser] = React.useState('');
+  const [step, setStep] = React.useState(0);
+
+  const handleSendEmail = async () => {
+    const email = `example${uuid.v4()}@test.usecapsule.com`;
+
+    const {userId} = await createUser({
+      email,
+    });
+    setIdUser(userId);
+    setStep(1);
+  };
+
+  const handleConfirmEmail = async () => {
+    await verifyEmail(idUser, {
+      verificationCode: '123456',
+    })
+      .then(async res => {
+        setStep(2);
+      })
+      .catch(err => {
+        console.log('error handleConfirmEmail ', err);
+      });
+  };
+
+  const wallet = async () => {
+    try {
+      await AsyncStorage.setItem(USER_ID_TAG, idUser);
+      const wallet = new ReactNativeCapsuleWallet();
+
+      await wallet.initSessionManagement();
+
+      await wallet.init();
+      console.log('Creating wallet...');
+      await wallet.createAccount(recoveryShare => {
+        console.log({recoveryShare});
+      });
+      console.log('Wallet created');
+    } catch (err: any) {
+      console.log({err});
+    }
+  };
+
   return (
     <SafeAreaView style={backgroundStyle}>
       <StatusBar
@@ -76,20 +125,29 @@ function App(): JSX.Element {
           style={{
             backgroundColor: isDarkMode ? Colors.black : Colors.white,
           }}>
-          <Section title="Step One">
-            Edit <Text style={styles.highlight}>App.tsx</Text> to change this
-            screen and then come back to see your edits.
-          </Section>
-          <Section title="See Your Changes">
-            <ReloadInstructions />
-          </Section>
-          <Section title="Debug">
-            <DebugInstructions />
-          </Section>
-          <Section title="Learn More">
-            Read the docs to discover what to do next:
-          </Section>
-          <LearnMoreLinks />
+          {step === 0 && (
+            <Section title="Send Email to: `example${uuid.v4()}@test.usecapsule.com`">
+              <TouchableOpacity onPress={handleSendEmail}>
+                <Text>
+                  Send OTP to: {`example${uuid.v4()}@test.usecapsule.com`}
+                </Text>
+              </TouchableOpacity>
+            </Section>
+          )}
+          {step === 1 && (
+            <Section title="Confirm otp">
+              <TouchableOpacity onPress={handleConfirmEmail}>
+                <Text>Confirm OTP</Text>
+              </TouchableOpacity>
+            </Section>
+          )}
+          {step === 2 && (
+            <Section title="Create Wallet">
+              <TouchableOpacity onPress={wallet}>
+                <Text>Create wallet</Text>
+              </TouchableOpacity>
+            </Section>
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>
