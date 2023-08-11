@@ -4,6 +4,7 @@
  *
  * @format
  */
+import uuid from 'react-native-uuid';
 
 import React from 'react';
 import type {PropsWithChildren} from 'react';
@@ -21,6 +22,7 @@ import {
 import {Colors, Header} from 'react-native/Libraries/NewAppScreen';
 
 import {createUser, verifyEmail} from '@usecapsule/react-native-wallet';
+// import '@usecapsule/react-native-wallet/test/quasitests';
 
 import {
   USER_ID_TAG,
@@ -28,8 +30,6 @@ import {
 } from '@usecapsule/react-native-wallet';
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
-import uuid from 'react-native-uuid';
 
 type SectionProps = PropsWithChildren<{
   title: string;
@@ -62,6 +62,8 @@ function Section({children, title}: SectionProps): JSX.Element {
 }
 
 function App(): JSX.Element {
+  // const array = new Uint32Array(10);
+  // crypto.getRandomValues(array);
   const isDarkMode = useColorScheme() === 'dark';
 
   const backgroundStyle = {
@@ -69,10 +71,18 @@ function App(): JSX.Element {
   };
 
   const [idUser, setIdUser] = React.useState('');
+  const [email, setEmail] = React.useState('');
   const [step, setStep] = React.useState(0);
+  const params = {
+    // offloadMPCComputationURL:
+    //   'https://partner-mpc-computation.beta.usecapsule.com',
+  };
+  const wallet = new ReactNativeCapsuleWallet(params);
 
   const handleSendEmail = async () => {
+    await AsyncStorage.clear();
     const email = `example${uuid.v4()}@test.usecapsule.com`;
+    setEmail(email);
 
     const {userId} = await createUser({
       email,
@@ -85,27 +95,46 @@ function App(): JSX.Element {
     await verifyEmail(idUser, {
       verificationCode: '123456',
     })
-      .then(async res => {
+      .then(async _ => {
         setStep(2);
       })
       .catch(err => {
         console.log('error handleConfirmEmail ', err);
       });
+    console.log(idUser + '|' + email);
   };
 
-  const wallet = async () => {
+  const createWallet = async () => {
     try {
-      await AsyncStorage.setItem(USER_ID_TAG, idUser);
-      const wallet = new ReactNativeCapsuleWallet();
-
-      await wallet.initSessionManagement();
-
-      await wallet.init();
+      await AsyncStorage.setItem(USER_ID_TAG, idUser + '|' + email);
+      await wallet.initSessionManagement(true);
       console.log('Creating wallet...');
-      await wallet.createAccount(recoveryShare => {
-        console.log({recoveryShare});
-      });
+      await wallet.createAccount();
       console.log('Wallet created');
+      setStep(3);
+    } catch (err: any) {
+      console.log({err});
+    }
+  };
+
+  const signPersonalMessage = async () => {
+    try {
+      const transaction = await wallet.signPersonalMessage(
+        (await wallet.getAccounts())[0],
+        '0x' + Buffer.from('Hello world!').toString('hex'),
+      );
+      console.log(JSON.stringify(transaction, null, 2));
+      setStep(4);
+    } catch (err: any) {
+      console.log({err});
+    }
+  };
+
+  const login = async () => {
+    try {
+      const wallet = new ReactNativeCapsuleWallet();
+      await wallet.importAccountViaWebAuth(email);
+      console.log('Wallet imported');
     } catch (err: any) {
       console.log({err});
     }
@@ -143,11 +172,28 @@ function App(): JSX.Element {
           )}
           {step === 2 && (
             <Section title="Create Wallet">
-              <TouchableOpacity onPress={wallet}>
+              <TouchableOpacity onPress={createWallet}>
                 <Text>Create wallet</Text>
               </TouchableOpacity>
             </Section>
           )}
+          {step === 3 && (
+            <Section title="Sign Personal Message">
+              <TouchableOpacity onPress={signPersonalMessage}>
+                <Text>Sign personal message</Text>
+              </TouchableOpacity>
+            </Section>
+          )}
+          {step === 4 && (
+            <Section title="You signed a transaction!">
+              <Text>Good job!</Text>
+            </Section>
+          )}
+          <Section title="Create Wallet">
+            <TouchableOpacity onPress={login}>
+              <Text>Login</Text>
+            </TouchableOpacity>
+          </Section>
         </View>
       </ScrollView>
     </SafeAreaView>
